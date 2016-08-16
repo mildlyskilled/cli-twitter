@@ -9,6 +9,7 @@ libraryDependencies ++= {
   Seq(
     "com.typesafe.akka" %% "akka-stream" % akkaVersion,
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
-    "com.typesafe.akka" %% "akka-http-experimental" % akkaVersion
+    "com.typesafe.akka" %% "akka-http-experimental" % akkaVersion,
+    "org.json4s" %% "json4s-native" % "3.4.0"
   )
 }
