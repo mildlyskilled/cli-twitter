@@ -8,9 +8,8 @@ class StatusPublisherActor extends ActorPublisher[Status] {
   val sub = context.system.eventStream.subscribe(self, classOf[Status])
 
   override def receive: Receive = {
-    case s: Status => {
+    case s: Status =>
       if (isActive && totalDemand > 0) onNext(s)
-    }
     case _ =>
   }
 

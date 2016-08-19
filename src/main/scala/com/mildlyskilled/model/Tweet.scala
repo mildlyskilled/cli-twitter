@@ -1,12 +1,33 @@
 package com.mildlyskilled.model
 
-final case class Author(handle: String)
+import java.util.Date
+import PartialFunction._
 
-final case class Hashtag(name: String)
-
-case class Tweet(author: Author, timestamp: Long, body: String) {
-  def hashtags: Set[Hashtag] =
-    body.split(" ").collect { case t if t.startsWith("#") => Hashtag(t)}.toSet
+final case class Author(handle: String) {
+  override def toString: String = s"${Console.YELLOW}$handle${Console.RESET}"
 }
 
-final object EmptyTweet extends Tweet(Author(""), 0L, "")
+final case class Hashtag(name: String) {
+  override def toString: String = s"${Console.YELLOW_B}$name${Console.RESET}"
+}
+
+object EmptyTweet extends Tweet(Author(""), new Date(), "")
+
+case class Tweet(author: Author, timestamp: Date, body: String) {
+
+  val hashTagRegex = "#\\w+".r
+
+  override def toString: String = {
+    val returnValue =  s"${Console.BOLD}On $timestamp $author wrote: ${Console.GREEN}$body${Console.RESET}"
+    if(hashtags.nonEmpty)
+      returnValue + "\n" +hashtags.mkString(" ")
+    else
+      returnValue
+  }
+
+
+  def hashtags: Set[Hashtag] = {
+    val hashIterator = for (hashtag <- hashTagRegex.findAllIn(body)) yield Hashtag(hashtag)
+    hashIterator.toSet
+  }
+}
