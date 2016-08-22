@@ -36,7 +36,7 @@ object ReactiveTweets {
 
       val extractTweet = Flow[Status].map((s) => Tweet(Author(s.getUser.getScreenName), s.getCreatedAt, s.getText))
 
-      val sink = Sink.foreach[Tweet]((t) => println(t))
+      val sink = Sink.foreach[Tweet]((t) => println(t + s"\n ${Console.BLUE}${"-" * 80}${Console.RESET}"))
 
       val begin = tweets ~> extractTweet
       if (args.exists((arg) => arg.startsWith("#"))) {
