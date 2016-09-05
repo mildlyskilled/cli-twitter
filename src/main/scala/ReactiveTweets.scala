@@ -6,14 +6,15 @@ import akka.stream.{ActorMaterializer, ClosedShape}
 import akka.stream.scaladsl._
 import com.mildlyskilled.api.{StatusPublisherActor, TwitterStreamClient}
 import com.mildlyskilled.model.{Author, Hashtag, Tweet}
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-
+import java.util.concurrent.{ExecutorService, Executors}
+import com.mildlyskilled.repository.RabbitConnection
 import twitter4j.Status
 
-import scala.concurrent.duration._
 import scala.concurrent._
 import scala.io.StdIn
-import io.scalac.amqp.{Connection, Message}
+import io.scalac.amqp.Message
+
+import scala.util.{Success, Failure}
 
 object ReactiveTweets {
 
@@ -26,13 +27,7 @@ object ReactiveTweets {
     val twitterStream = new TwitterStreamClient(system)
 
 
-    val connection = Connection()
-    connection match {
-      case ex: Exception => system.log.error(ex.getMessage)
-      case _ => system.log.info("RabbitMQ Connection established")
-    }
-    val queue = connection.consume(queue = "reactive-tweets")
-    val exchange = connection.publish(exchange="reactive", routingKey = "tweets")
+
 
     val g = RunnableGraph.fromGraph(GraphDSL.create() { implicit b =>
       import GraphDSL.Implicits._
@@ -48,8 +43,6 @@ object ReactiveTweets {
 
       val sink = Sink.foreach[Tweet]((t) => println(t + s"\n ${Console.BLUE}${"-" * 80}${Console.RESET}"))
 
-      val RMQSink = Sink.fromSubscriber[Message](exchange)
-
       val tweetToMessage = Flow[Tweet].map((t) => Message(body = t.body.getBytes))
 
       val bcast = b.add(Broadcast[Tweet](2))
@@ -62,8 +55,17 @@ object ReactiveTweets {
           exists(h => hashtags.contains(h)))
         begin ~> extractHashtag ~> sink
       } else {
-        begin ~> bcast ~> tweetToMessage ~> RMQSink
-        bcast ~> sink
+        begin ~> bcast ~> sink
+
+        // broadcast to RabbitMQ if we have a connection
+        RabbitConnection.connection match {
+          case Success(connection) =>
+            RabbitConnection.exchange match {
+              case Some(e) => bcast ~> tweetToMessage ~> Sink.fromSubscriber[Message](e)
+              case None => system.log.debug("Unable to broadcast to RabbitMQ")
+            }
+          case Failure(ex) => system.log.debug(ex.getMessage)
+        }
       }
 
       ClosedShape
@@ -78,7 +80,7 @@ object ReactiveTweets {
 
     println(s"${Console.RED}Exiting...${Console.RESET}")
     twitterStream.stop()
-    connection.shutdown()
+    RabbitConnection.connection.foreach(_.shutdown)
     system.terminate()
   }
 
