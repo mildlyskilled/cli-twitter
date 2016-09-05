@@ -11,6 +11,7 @@ libraryDependencies ++= {
     "com.typesafe.akka" %% "akka-actor" % akkaVersion,
     "com.typesafe.akka" %% "akka-http-experimental" % akkaVersion,
     "org.twitter4j" % "twitter4j-core" % "4.0.4",
-    "org.twitter4j" % "twitter4j-stream" % "4.0.4"
+    "org.twitter4j" % "twitter4j-stream" % "4.0.4",
+    "io.scalac" %% "reactive-rabbit" % "1.1.2"
   )
 }
