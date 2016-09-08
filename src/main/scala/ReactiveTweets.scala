@@ -40,13 +40,19 @@ object ReactiveTweets {
       // create a Source, with an actor that listen items from the event bus
       val tweets = Source.actorPublisher(Props[StatusPublisherActor])
 
-      val extractTweet = Flow[Status].map((s) => Tweet(Author(s.getUser.getScreenName), s.getCreatedAt, s.getText))
+      val extractTweet = Flow[Status].map((s) => Tweet(Author(s.getUser.getScreenName, s.getUser.getId), s.getCreatedAt, s.getText))
 
-      val sink = Sink.foreach[Tweet]((t) => println(t + s"\n ${Console.BLUE}${"-" * 80}${Console.RESET}"))
+      val sink = Sink.foreach[Tweet]((t) => println(s"$t \n ${Console.BLUE}${"-" * 80}${Console.RESET}"))
 
       val tweetToMessage = Flow[Tweet].map((t) => Message(body = t.body.getBytes))
 
-      lazy val broadcast = b.add(Broadcast[Tweet](2))
+      val extractMentions = Flow[Tweet].filter((t) => t.body.contains(twitterStream.twitterStream.getScreenName))
+
+      val removeMentions = Flow[Tweet].filterNot((t) => t.body.contains(twitterStream.twitterStream.getScreenName))
+
+      val sinkMentions = Sink.foreach[Tweet]((t) => println(s"$t \n ${Console.RED}${"-" * 80}${Console.RESET}"))
+
+      lazy val broadcast = b.add(Broadcast[Tweet](3))
 
       val begin = tweets ~> extractTweet
       if (args.exists((arg) => arg.startsWith("#"))) {
@@ -64,8 +70,9 @@ object ReactiveTweets {
             RabbitConnection.exchange match {
               case Some(exchange) =>
                 system.log.info("Successfully established connection to RabbitMQ")
-                begin ~> broadcast ~> sink
+                begin ~> broadcast ~> removeMentions ~> sink
                 broadcast ~> tweetToMessage ~> Sink.fromSubscriber[Message](exchange)
+                broadcast ~> extractMentions ~> sinkMentions
               case None =>
                 system.log.info("Unable to broadcast to RabbitMQ failed to set up the exchange")
                 begin ~> sink
@@ -91,6 +98,9 @@ object ReactiveTweets {
       case "stop" =>
         println(s"${Console.RED}Stopping...${Console.RESET}")
         twitterStream.stop()
+      case "start" =>
+        println(s"${Console.RED}Starting...${Console.RESET}")
+        twitterStream.start()
       case postRegex(_, msg) =>
         twitterStream.stop()
         TwitterRepository.postStatus(msg)
