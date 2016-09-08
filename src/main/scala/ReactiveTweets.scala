@@ -7,14 +7,15 @@ import akka.stream.scaladsl._
 import com.mildlyskilled.api.{StatusPublisherActor, TwitterStreamClient}
 import com.mildlyskilled.model.{Author, Hashtag, Tweet}
 import java.util.concurrent.{ExecutorService, Executors}
-import com.mildlyskilled.repository.RabbitConnection
+
+import com.mildlyskilled.repository.{RabbitConnection, TwitterRepository}
 import twitter4j.Status
 
 import scala.concurrent._
 import scala.io.StdIn
 import io.scalac.amqp.Message
 
-import scala.util.{Success, Failure}
+import scala.util.{Failure, Success}
 
 object ReactiveTweets {
 
@@ -24,7 +25,7 @@ object ReactiveTweets {
     implicit val system: ActorSystem = ActorSystem("reactive-tweets")
     implicit val ec: ExecutionContext = ExecutionContext.fromExecutorService(execService)
     implicit val materializer = ActorMaterializer()(system)
-    val twitterStream = new TwitterStreamClient(system)
+    val twitterStream: TwitterStreamClient = new TwitterStreamClient(system)
 
 
 
@@ -45,7 +46,7 @@ object ReactiveTweets {
 
       val tweetToMessage = Flow[Tweet].map((t) => Message(body = t.body.getBytes))
 
-      val bcast = b.add(Broadcast[Tweet](2))
+      lazy val broadcast = b.add(Broadcast[Tweet](2))
 
       val begin = tweets ~> extractTweet
       if (args.exists((arg) => arg.startsWith("#"))) {
@@ -55,16 +56,23 @@ object ReactiveTweets {
           exists(h => hashtags.contains(h)))
         begin ~> extractHashtag ~> sink
       } else {
-        begin ~> bcast ~> sink
+
 
         // broadcast to RabbitMQ if we have a connection
         RabbitConnection.connection match {
           case Success(connection) =>
             RabbitConnection.exchange match {
-              case Some(e) => bcast ~> tweetToMessage ~> Sink.fromSubscriber[Message](e)
-              case None => system.log.debug("Unable to broadcast to RabbitMQ")
+              case Some(exchange) =>
+                system.log.info("Successfully established connection to RabbitMQ")
+                begin ~> broadcast ~> sink
+                broadcast ~> tweetToMessage ~> Sink.fromSubscriber[Message](exchange)
+              case None =>
+                system.log.info("Unable to broadcast to RabbitMQ failed to set up the exchange")
+                begin ~> sink
             }
-          case Failure(ex) => system.log.debug(ex.getMessage)
+          case Failure(exception) =>
+            system.log.info(s"Unable to broadcast to RabbitMQ: ${exception.getMessage}")
+            begin ~> sink
         }
       }
 
@@ -73,8 +81,20 @@ object ReactiveTweets {
 
     g.run()
 
+    val postRegex = """(/post) (.*)"""r
+
     Iterator.continually(StdIn.readLine).takeWhile(_ != "exit").foreach {
-      case "restart" => println("restarting")
+      case "restart" =>
+        println(s"${Console.RED}Restarting...${Console.RESET}")
+        twitterStream.stop()
+        twitterStream.start()
+      case "stop" =>
+        println(s"${Console.RED}Stopping...${Console.RESET}")
+        twitterStream.stop()
+      case postRegex(_, msg) =>
+        twitterStream.stop()
+        TwitterRepository.postStatus(msg)
+        twitterStream.start()
       case input => println(input)
     }
 

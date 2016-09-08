@@ -5,8 +5,8 @@ import twitter4j.{Status, User}
 import scala.collection.JavaConversions._
 
 object TwitterRepository {
+  val client = TwitterClient()
   def lookupUsers(id: Long): List[User] = {
-    val client = TwitterClient()
     client.lookupUsers(id).toList
   }
 
@@ -17,5 +17,9 @@ object TwitterRepository {
 
   def parseStatus(status: Status): String = {
     status.getText
+  }
+
+  def postStatus(status: String): Status = {
+    client.updateStatus(status)
   }
 }

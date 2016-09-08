@@ -44,7 +44,9 @@ class TwitterStreamClient(val actorSystem: ActorSystem) {
 
     def onDeletionNotice(directMessageId: Long, userId: Long): Unit = {}
 
-    def onFavorite(source: User, target: User, favoritedStatus: Status): Unit = {}
+    def onFavorite(source: User, target: User, favoritedStatus: Status): Unit = {
+      actorSystem.eventStream.publish(favoritedStatus)
+    }
 
     def onQuotedTweet(source: User, target: User, quotingTweet: Status): Unit = {}
 
@@ -81,6 +83,11 @@ class TwitterStreamClient(val actorSystem: ActorSystem) {
   def stop() = {
     twitterStream.cleanUp()
     twitterStream.shutdown()
+  }
+
+  def start() = {
+    twitterStream.addListener(userStreamListener)
+    twitterStream.user()
   }
 
 }
