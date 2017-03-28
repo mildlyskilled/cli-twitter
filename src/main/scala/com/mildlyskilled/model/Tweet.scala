@@ -18,7 +18,7 @@ case class Tweet(author: Author, timestamp: Date, body: String) {
   val hashTagRegex = "#\\w+".r
 
   override def toString: String = {
-    val returnValue = s"${Console.BOLD}On $timestamp $author wrote: ${Console.GREEN}$body${Console.RESET}"
+    val returnValue = s"On $timestamp https://twitter.com/$author wrote: ${Console.GREEN}$body${Console.RESET}"
 
     if (hashtags.nonEmpty)
       returnValue + "\n" + hashtags.mkString(" ")

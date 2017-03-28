@@ -15,3 +15,5 @@ libraryDependencies ++= {
     "io.scalac" %% "reactive-rabbit" % "1.1.2"
   )
 }
+
+lazy val universalPlugin = (project in file("reactive-tweets")).enablePlugins(UniversalPlugin)
